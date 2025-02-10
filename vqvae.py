@@ -8,10 +8,6 @@ from typing import List, Callable, Union, Any, TypeVar, Tuple
 
 
 class VAE(nn.Module, ABC):
-    """
-    Base class for all Variational AutoEncoders.
-    Provides a standard interface for VAE-based models.
-    """
     def __init__(self) -> None:
         super(VAE, self).__init__()
 
@@ -43,7 +39,7 @@ class VectorQuantizer(nn.module):
                  num_embeddings: int,
                  embedding_dim: int,
                  beta: float): # beta는 논문 어디에?
-        self.__init__() # super.__init__과의 차이?
+        super(VectorQuantizer, self).__init__() # super.__init__과의 차이?
         self.K = num_embeddings
         self.D = embedding_dim
         self.beta = beta # commitment loss weight
