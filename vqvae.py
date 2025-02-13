@@ -34,7 +34,7 @@ class VAE(nn.Module, ABC):
         pass
 
 
-class VectorQuantizer(nn.module):
+class VectorQuantizer(nn.Module):
     def __init__(self,
                  num_embeddings: int,
                  embedding_dim: int,
@@ -46,7 +46,7 @@ class VectorQuantizer(nn.module):
         self.embedding = nn.Embedding(self.K, self.D) # embedding space(codebook) E
         self.embedding.weight.data.uniform_(-1 / self.K, 1 / self.K) # initialization, umiform prior distribution
         
-    def forward(self):
+    def forward(self, latents):
         latents = latents.permute(0, 2, 3, 1).contiguous()  # [B x D x H x W] -> [B x H x W x D]
         latents_shape = latents.shape
         flat_latents = latents.view(-1, self.D)  # [BHW x D]
@@ -220,7 +220,12 @@ class VQVAE(VAE):
     def sample(self,
                num_samples: int,
                current_device: Union[int, str], **kwargs) -> Tensor:
-        raise Warning('VQVAE sampler is not implemented.')
+    #     raise Warning('VQVAE sampler is not implemented.')
+        z = torch.randint(0, self.num_embeddings, (num_samples, self.img_size // 4, self.img_size // 4)).to(current_device)
+        quantized = self.vq_layer.embedding(z)  # [B, H, W, embedding_dim]
+        quantized = quantized.permute(0, 3, 1, 2).contiguous()  # [B, C, H, W]
+        samples = self.decode(quantized)
+        return samples  # [num_samples, 3, 64, 64]
 
     def generate(self, x: Tensor, **kwargs) -> Tensor:
         return self.forward(x)[0]
