@@ -3,6 +3,7 @@ import os
 
 from train import train_imagenet, train_cifar10, fid_cifar10, train_mnist
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train, Evaluate, or Reconstruct VQ-VAE on ImageNet, CIFAR-10, or MNIST")
 
@@ -24,11 +25,11 @@ if __name__ == "__main__":
     
     elif args.mode == "fid":
         if args.dataset == "imagenet":
-            print("🔹 ImageNet용 FID 평가 코드는 아직 구현되지 않았습니다.")
+            print("ImageNet용 FID 평가 코드는 아직 구현되지 않았습니다.")
         elif args.dataset == "cifar10":
             fid_cifar10()
         else:
-            print("🔹 MNIST용 FID 평가 코드는 아직 구현되지 않았습니다.")
+            print("MNIST용 FID 평가 코드는 아직 구현되지 않았습니다.")
 
     elif args.mode == "reconstruct":
         os.system(f"python reconstruction.py --dataset {args.dataset}")

@@ -1,21 +1,7 @@
 import torch
 
-# Configuration for ImageNet mini
-imagenet_config = {
-    "batch_size": 128, 
-    "lr": 2e-4,  
-    "epochs": 100,  
-    "image_size": 128,  
-    "latent_dim": 32,   
-    "num_embeddings": 512,
-    "commitment_cost": 0.25,
-    "num_residual_layers": 2,
-    "residual_hidden_channels": 32,
-    "device": "cuda" if torch.cuda.is_available() else "cpu",
-    "checkpoint_path": "/root/limlab/yeongyu/vqvae/checkpoint/best_valid_loss_imagenet.pth",
-    "image_path": "/root/limlab/yeongyu/vqvae/experiments/reconstructed_images_imagenet.png"
-}
 
+# Configuration for CIFAR-10
 cifar10_config = {
     "batch_size": 128,  
     "lr": 2e-4,  
@@ -31,6 +17,22 @@ cifar10_config = {
     "device": "cuda" if torch.cuda.is_available() else "cpu",
     "checkpoint_path": "/root/limlab/yeongyu/vqvae/checkpoint/best_valid_loss_cifar10.pth",
     "image_path": "/root/limlab/yeongyu/vqvae/experiments/reconstructed_images_cifar10.png"
+}
+
+# Configuration for mini-ImageNet
+imagenet_config = {
+    "batch_size": 128, 
+    "lr": 2e-4,  
+    "epochs": 100,  
+    "image_size": 128,  
+    "latent_dim": 32,   
+    "num_embeddings": 512,
+    "commitment_cost": 0.25,
+    "num_residual_layers": 2,
+    "residual_hidden_channels": 32,
+    "device": "cuda" if torch.cuda.is_available() else "cpu",
+    "checkpoint_path": "/root/limlab/yeongyu/vqvae/checkpoint/best_valid_loss_imagenet.pth",
+    "image_path": "/root/limlab/yeongyu/vqvae/experiments/reconstructed_images_imagenet.png"
 }
 
 # Configuration for MNIST
