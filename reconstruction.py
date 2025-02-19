@@ -1,168 +1,48 @@
-# import torch
-# import matplotlib.pyplot as plt
-# import torchvision.utils as vutils
-# from model_imagenet import VQVAE
-# from model_mnist import VQVAE
-# from dataset import get_imagenet_dataloader, get_mnist_dataloader
-# from config import imagenet_config, mnist_config
-
-# # ✅ 저장된 체크포인트 불러오기
-# def load_model(checkpoint_path):
-#     model = VQVAE(
-#         in_channels=3,
-#         hidden_channels=128,
-#         latent_dim=config["latent_dim"],
-#         num_residual_layers=2,
-#         residual_hidden_channels=32,
-#         num_embeddings=config["num_embeddings"],
-#         commitment_cost=config["commitment_cost"]
-#     ).to(config["device"])
-
-#     model.load_state_dict(torch.load(checkpoint_path, map_location=config["device"]))
-#     model.eval()
-#     print(f"✅ 모델 체크포인트 '{checkpoint_path}' 로드 완료!")
-#     return model
-
-# # ✅ 재구성된 이미지 출력 함수
-# def show_reconstructed_images(model, data_loader, device, num_images=10, save_path=config["image_path"]):
-#     model.eval()
-#     original_images = []
-#     reconstructed_images = []
-
-#     with torch.no_grad():
-#         for images, _ in data_loader:
-#             images = images.to(device)
-#             reconstructed, _ = model(images)
-#             original_images.append(images.cpu())
-#             reconstructed_images.append(reconstructed.cpu())
-#             if len(original_images) * images.size(0) >= num_images:
-#                 break
-
-#     original_images = torch.cat(original_images)[:num_images]
-#     reconstructed_images = torch.cat(reconstructed_images)[:num_images]
-
-#     # ✅ 이미지 역정규화 (ImageNet Mean & Std)
-#     def denormalize(tensor):
-#         mean = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
-#         std = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
-#         tensor = tensor * std + mean
-#         return torch.clamp(tensor, 0, 1)
-
-#     original_images = denormalize(original_images)
-#     reconstructed_images = denormalize(reconstructed_images)
-
-#     # ✅ 원본 vs 재구성 이미지 비교
-#     fig, axes = plt.subplots(nrows=num_images, ncols=2, figsize=(10, num_images * 5))
-#     for i in range(num_images):
-#         axes[i, 0].imshow(original_images[i].permute(1, 2, 0))
-#         axes[i, 0].set_title("Original Image")
-#         axes[i, 0].axis("off")
-#         axes[i, 1].imshow(reconstructed_images[i].permute(1, 2, 0))
-#         axes[i, 1].set_title("Reconstructed Image")
-#         axes[i, 1].axis("off")
-
-#     plt.tight_layout()
-#     plt.savefig(save_path)
-#     print(f"✅ 재구성된 이미지가 '{save_path}'에 저장되었습니다.")
-#     plt.close()
-
-# # ✅ 실행 부분
-# if __name__ == "__main__":
-#     print("🔄 모델 로드 중...")
-#     vqvae = load_model(config["checkpoint_path"])
-    
-#     print("📥 데이터 로드 중...")
-#     _, test_loader = get_imagenet_dataloader()
-
-#     print("🎨 이미지 재구성 중...")
-#     show_reconstructed_images(vqvae, test_loader, config["device"], num_images=10)
-
-# ##################################################################################
-
-# checkpoint_path = config["checkpoint_path"]
-
-# vqvae = VQVAE(
-#     channel_in=1,
-#     ch=16,
-#     latent_channels=config["latent_dim"],
-#     code_book_size=config["num_embeddings"],
-#     commitment_cost=config["commitment_cost"]
-# ).to(config["device"])
-
-# vqvae.load_state_dict(torch.load(checkpoint_path, map_location=config["device"]))
-# vqvae.eval()
-# print(f"✅ 모델 체크포인트 '{checkpoint_path}' 로드 완료!")
-
-# # ✅ 테스트 데이터 로드
-# _, test_loader = get_mnist_dataloader()
-
-# # ✅ 이미지 복원 함수
-# def show_reconstructed_images(model, data_loader, device, num_images=10, save_path=config["image_path"]):
-#     model.eval()
-#     original_images = []
-#     reconstructed_images = []
-
-#     with torch.no_grad():
-#         for images, _ in data_loader:
-#             images = images.to(device)
-#             reconstructed, _, _ = model(images)
-#             # recon_data, vq_loss, quantized = model(images)
-#             # vq_loss, quantized, encoding_indices = model.encode(images)
-#             # encoding_indices[0]
-            
-#             original_images.append(images.cpu())
-#             reconstructed_images.append(reconstructed.cpu())
-#             if len(original_images) * images.size(0) >= num_images:
-#                 break
-
-#     original_images = torch.cat(original_images)[:num_images]
-#     reconstructed_images = torch.cat(reconstructed_images)[:num_images]
-
-#     # ✅ 원본 및 복원 이미지 시각화
-#     fig, axes = plt.subplots(nrows=num_images, ncols=2, figsize=(10, num_images * 2))
-#     for i in range(num_images):
-#         axes[i, 0].imshow(original_images[i].squeeze(), cmap="gray")
-#         axes[i, 0].set_title("Original")
-#         axes[i, 0].axis("off")
-#         axes[i, 1].imshow(reconstructed_images[i].squeeze(), cmap="gray")
-#         axes[i, 1].set_title("Reconstructed")
-#         axes[i, 1].axis("off")
-
-#     plt.tight_layout()
-#     plt.savefig(save_path)
-#     print(f"✅ 재구성된 이미지가 '{save_path}'에 저장되었습니다.")
-#     plt.close()
-
-# # ✅ 복원 실행
-# show_reconstructed_images(vqvae, test_loader, config["device"])
-
-
 import torch
 import matplotlib.pyplot as plt
+import argparse
+from torchvision.utils import make_grid
+
+from model_cifar10 import VQVAE
 from model_imagenet import VQVAE as VQVAE_Imagenet
 from model_mnist import VQVAE as VQVAE_MNIST
-from dataset import get_imagenet_dataloader, get_mnist_dataloader
-from config import imagenet_config, mnist_config
+from dataset import get_imagenet_dataloader, get_cifar10_dataloader, get_mnist_dataloader
+from config import imagenet_config, cifar10_config, mnist_config
 
-def load_model(checkpoint_path, config, model_class):
+
+def load_model(checkpoint_path, config, model_class):    
     model = model_class(
-        in_channels=config.get("channel_in", 3),
-        hidden_channels=config.get("hidden_channels", 128),
+        in_channels=config["in_channels"],
+        hidden_channels=config["hidden_channels"], 
         latent_dim=config["latent_dim"],
-        num_residual_layers=config.get("num_residual_layers", 2),
-        residual_hidden_channels=config.get("residual_hidden_channels", 32),
+        num_residual_layers=config["num_residual_layers"],
+        residual_hidden_channels=config["residual_hidden_channels"],
         num_embeddings=config["num_embeddings"],
         commitment_cost=config["commitment_cost"]
     ).to(config["device"])
+    
     model.load_state_dict(torch.load(checkpoint_path, map_location=config["device"]))
     model.eval()
-    print(f"✅ 모델 체크포인트 '{checkpoint_path}' 로드 완료!")
+    print(f"모델 체크포인트 '{checkpoint_path}' 로드 완료!")
     return model
 
-def show_reconstructed_images(model, data_loader, device, num_images=10, save_path="output.png", is_mnist=False):
+
+def save_images_as_grid(images, save_path, is_mnist=False):
+    """논문처럼 원본 또는 재구성 이미지를 한 장의 이미지로 저장"""
+    grid = make_grid(images, nrow=5, padding=2, normalize=True)  # 한 줄에 5개씩 배치
+    plt.figure(figsize=(10, 4))
+    plt.imshow(grid.permute(1, 2, 0) if not is_mnist else grid.squeeze(), cmap="gray" if is_mnist else None)
+    plt.axis("off")
+    plt.savefig(save_path, bbox_inches="tight", pad_inches=0)
+    print(f"✅ 이미지 저장 완료: {save_path}")
+    plt.close()
+
+
+def show_reconstructed_images(model, data_loader, device, num_images=10, original_path="originals.png", recon_path="reconstructions.png", is_mnist=False):
+    """논문처럼 원본과 재구성 이미지를 각각 한 장씩 저장"""
     model.eval()
     original_images, reconstructed_images = [], []
-    
+
     with torch.no_grad():
         for images, _ in data_loader:
             images = images.to(device)
@@ -175,28 +55,17 @@ def show_reconstructed_images(model, data_loader, device, num_images=10, save_pa
     original_images = torch.cat(original_images)[:num_images]
     reconstructed_images = torch.cat(reconstructed_images)[:num_images]
 
-    fig, axes = plt.subplots(nrows=num_images, ncols=2, figsize=(10, num_images * 2))
-    for i in range(num_images):
-        if is_mnist:
-            axes[i, 0].imshow(original_images[i].squeeze(), cmap="gray")
-            axes[i, 1].imshow(reconstructed_images[i].squeeze(), cmap="gray")
-        else:
-            axes[i, 0].imshow(original_images[i].permute(1, 2, 0))
-            axes[i, 1].imshow(reconstructed_images[i].permute(1, 2, 0))
-        axes[i, 0].set_title("Original")
-        axes[i, 0].axis("off")
-        axes[i, 1].set_title("Reconstructed")
-        axes[i, 1].axis("off")
+    # 원본 이미지 저장
+    save_images_as_grid(original_images, original_path, is_mnist)
 
-    plt.tight_layout()
-    plt.savefig(save_path)
-    print(f"✅ 재구성된 이미지가 '{save_path}'에 저장되었습니다.")
-    plt.close()
+    # 재구성 이미지 저장
+    save_images_as_grid(reconstructed_images, recon_path, is_mnist)
 
 if __name__ == "__main__":
-    import argparse
     parser = argparse.ArgumentParser(description="VQ-VAE Reconstruction")
-    parser.add_argument("--dataset", type=str, choices=["imagenet", "mnist"], required=True, help="Choose dataset: imagenet or mnist")
+    
+    parser.add_argument("--dataset", type=str, choices=["imagenet", "cifar10", "mnist"], required=True, help="Choose dataset: imagenet, cifar10, or mnist")
+    
     args = parser.parse_args()
 
     if args.dataset == "imagenet":
@@ -206,7 +75,17 @@ if __name__ == "__main__":
         _, test_loader = get_imagenet_dataloader()
         print("🎨 이미지 재구성 중...")
         show_reconstructed_images(vqvae, test_loader, imagenet_config["device"], num_images=10, save_path=imagenet_config["image_path"], is_mnist=False)
-    else:
+
+    elif args.dataset == "cifar10":
+        print("🔄 모델 로드 중...")
+        vqvae = load_model(cifar10_config["checkpoint_path"], cifar10_config, VQVAE)
+        print("📥 데이터 로드 중...")
+        _, test_loader = get_cifar10_dataloader()
+        print("🎨 이미지 재구성 중...")
+        show_reconstructed_images(vqvae, test_loader, cifar10_config["device"], num_images=10,
+                                  original_path="/root/limlab/yeongyu/vqvae/experiments/originals.png", recon_path=cifar10_config["image_path"], is_mnist=False)
+
+    else:  # MNIST
         print("🔄 모델 로드 중...")
         vqvae = load_model(mnist_config["checkpoint_path"], mnist_config, VQVAE_MNIST)
         print("📥 데이터 로드 중...")

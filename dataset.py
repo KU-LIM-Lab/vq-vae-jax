@@ -5,7 +5,7 @@ import torchvision.transforms as transforms
 from torchvision.datasets import ImageFolder# ,MNIST
 import torchvision.datasets as datasets
 from torch.utils.data import DataLoader
-from config import imagenet_config, mnist_config
+from config import imagenet_config, cifar10_config, mnist_config
 
 
 def get_imagenet_dataloader():
@@ -25,6 +25,23 @@ def get_imagenet_dataloader():
 
     test_dataset = ImageFolder(root=VAL_PATH, transform=transform)
     test_loader = DataLoader(test_dataset, batch_size=imagenet_config["batch_size"], shuffle=False, num_workers=4)
+
+    return train_loader, test_loader
+
+
+def get_cifar10_dataloader():
+    """VQ-VAE 논문과 동일한 방식으로 CIFAR-10 데이터 로드"""
+    transform = transforms.Compose([
+        transforms.Resize((cifar10_config["image_size"], cifar10_config["image_size"])),  # CIFAR-10은 32x32로 유지
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])  # VQ-VAE 논문에서 사용한 정규화
+    ])
+
+    train_dataset = datasets.CIFAR10(root="./cifar10_data", train=True, transform=transform, download=True)
+    test_dataset = datasets.CIFAR10(root="./cifar10_data", train=False, transform=transform, download=True)
+
+    train_loader = DataLoader(train_dataset, batch_size=cifar10_config["batch_size"], shuffle=True, num_workers=4, pin_memory=True)
+    test_loader = DataLoader(test_dataset, batch_size=cifar10_config["batch_size"], shuffle=False, num_workers=4, pin_memory=True)
 
     return train_loader, test_loader
 
