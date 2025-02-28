@@ -127,7 +127,6 @@ class VeectorQuantizer(nnx.Module):
         
         # initialize embedding space
         self.embedding = nnx.Param(jax.random.uniform(key, (K, hidden_dim)))  
-        
     
     def __call__(self, z_e):
         z_e_flattened = z_e.reshape(-1, self.hidden_dim)  # [B*H*W, D]
