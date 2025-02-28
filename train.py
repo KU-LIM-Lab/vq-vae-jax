@@ -1,120 +1,149 @@
 import numpy as np
 import jax
 import jax.numpy as jnp
-import optax
+
+from flax import nnx
 import flax.linen as nn
+
+import optax
+import orbax.checkpoint as ocp
+
 import tensorflow as tf
 import tensorflow_datasets as tfds
+
 import wandb
 from tqdm import tqdm
-import pickle
 
-from model_imagenet import VQVAE as VQVAE_Imagenet
-from model_mnist import VQVAE as VQVAE_MNIST
-from dataset import get_imagenet_dataloader, get_mnist_dataloader
-from config import imagenet_config, mnist_config
-from utils import get_features, calculate_fid
+# from utils import get_features, calculate_fid
+
+from model import VQVAE
+from utils import get_dataset
 
 
-class TrainState(nn.TrainState):
-    vq_loss: jnp.ndarray
+def loss_fn(model: VQVAE, batch):
+    x_recon, loss = model(batch['image'])
+    # x_recon, loss = model(jnp.asarray(batch['image']))
+    recon_loss = optax.squared_error(
+        predictions=x_recon, targets=batch['image']
+        # predictions=x_recon, targets=jnp.asarray(batch['image'])
+    ).mean()
+    aux = {"recon_loss": recon_loss, "vq_loss": loss}
+    return recon_loss + loss, aux
 
+# def loss_fn(model: VQVAE, batch):
+#     x_recon, loss = model(batch['image'])
+#     # x_recon, loss = model(jnp.asarray(batch['image']))
+#     recon_loss = optax.squared_error(
+#         predictions=x_recon, targets=batch['image']
+#         # predictions=x_recon, targets=jnp.asarray(batch['image'])
+#     ).mean()
+#     aux = {"recon_loss": recon_loss, "vq_loss": loss}
+#     return recon_loss, aux
 
-def train_step(state, batch):
-    def loss_fn(params):
-        recon, vq_loss = state.apply_fn({'params': params}, batch)
-        mse_loss = jnp.mean((recon - batch) ** 2)
-        return mse_loss + vq_loss, (mse_loss, vq_loss)
+# def loss_fn(model: VQVAE, batch):
+#     x_recon, loss = model(batch['image'])
+#     # x_recon, loss = model(jnp.asarray(batch['image']))
+#     recon_loss = optax.squared_error(
+#         predictions=x_recon, targets=batch['image']
+#         # predictions=x_recon, targets=jnp.asarray(batch['image'])
+#     ).mean()
+#     aux = {"recon_loss": recon_loss, "vq_loss": loss}
+#     return loss, aux
+
+@nnx.jit
+def train_step(model: VQVAE, optimizer: nnx.Optimizer, metrics: nnx.MultiMetric, batch):
+    """Train for a single step."""
+    grad_fn = nnx.value_and_grad(loss_fn, has_aux=True)
+    (loss, losses), grads = grad_fn(model, batch)
+    metrics.update(
+        total_loss=loss,
+        recon_loss=losses["recon_loss"],
+        vq_loss=losses["vq_loss"],
+        )  # In-place updates.
+    optimizer.update(grads)  # In-place updates.
+
+@nnx.jit
+def eval_step(model: VQVAE, metrics: nnx.MultiMetric, batch):
+    loss, losses = loss_fn(model, batch)
+    metrics.update(
+        total_loss=loss,
+        recon_loss=losses["recon_loss"],
+        vq_loss=losses["vq_loss"],
+        )  # In-place updates.
     
-    grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
-    (loss, (mse_loss, vq_loss)), grads = grad_fn(state.params)
-    state = state.apply_gradients(grads=grads)
-    return state, loss, mse_loss, vq_loss
 
-
-def train_imagenet():
-    wandb.init(project="vqvae-imagenet", config=imagenet_config)
-    train_ds, test_ds = get_imagenet_dataloader()
+def train(args):
+    wandb.init(
+        project="vqvae-cifar10", 
+        # name="vqvae-cifar10",
+        config=args
+        )
     
-    model = VQVAE_Imagenet(3, 128, imagenet_config["latent_dim"], 2, 32, imagenet_config["num_embeddings"], imagenet_config["commitment_cost"])
-    rng = jax.random.PRNGKey(0)
-    params = model.init(rng, jnp.ones((1, 128, 128, 3)))['params']
-    optimizer = optax.adam(imagenet_config["lr"])
-    state = TrainState.create(apply_fn=model.apply, params=params, tx=optimizer, vq_loss=jnp.array(0.0))
-
-    best_valid_loss = float("inf")
-    for epoch in range(imagenet_config["epochs"]):
-        total_train_loss, total_train_vq_loss = 0, 0
-        for batch in tqdm(train_ds, desc=f"Training Epoch {epoch+1}"):
-            state, train_loss, mse_loss, vq_loss = train_step(state, batch)
-            total_train_loss += mse_loss
-            total_train_vq_loss += vq_loss
-        avg_train_loss = total_train_loss / len(train_ds)
-        avg_train_vq_loss = total_train_vq_loss / len(train_ds)
-
-        total_valid_loss, total_valid_vq_loss = 0, 0
-        real_features, fake_features = [], []
-        for batch in tqdm(test_ds, desc="Validating"):
-            recon, valid_vq_loss = model.apply({'params': state.params}, batch)
-            valid_loss = jnp.mean((recon - batch) ** 2) + valid_vq_loss
-            total_valid_loss += valid_loss
-            total_valid_vq_loss += valid_vq_loss
-            real_features.append(get_features(batch))
-            fake_features.append(get_features(recon))
-        
-        avg_valid_loss = total_valid_loss / len(test_ds)
-        avg_valid_vq_loss = total_valid_vq_loss / len(test_ds)
-        fid_score = calculate_fid(np.concatenate(real_features, axis=0), np.concatenate(fake_features, axis=0))
-        
-        wandb.log({"epoch": epoch + 1, "train_loss": avg_train_loss, "train_vq_loss": avg_train_vq_loss, "valid_loss": avg_valid_loss, "valid_vq_loss": avg_valid_vq_loss, "fid_score": fid_score})
-        print(f"Epoch [{epoch+1}/{imagenet_config['epochs']}], Train Loss: {avg_train_loss:.4f}, Valid Loss: {avg_valid_loss:.4f}, FID: {fid_score:.2f}")
-        
-        if avg_valid_loss < best_valid_loss:
-            best_valid_loss = avg_valid_loss
-            with open(imagenet_config["checkpoint_path"], "wb") as f:
-                pickle.dump(state.params, f)
-            print(f"✅ Checkpoint Saved: {imagenet_config['checkpoint_path']} (Valid Loss: {best_valid_loss:.4f})")
-
-
-def train_mnist():
-    wandb.init(project="vqvae-mnist", config=mnist_config)
-    train_ds, test_ds = get_mnist_dataloader()
+    train_ds, test_ds = get_dataset(args)
     
-    model = VQVAE_MNIST(1, 16, mnist_config["latent_dim"], mnist_config["num_embeddings"], mnist_config["commitment_cost"])
-    rng = jax.random.PRNGKey(0)
-    params = model.init(rng, jnp.ones((1, 32, 32, 1)))['params']
-    optimizer = optax.adam(mnist_config["lr"])
-    state = TrainState.create(apply_fn=model.apply, params=params, tx=optimizer, vq_loss=jnp.array(0.0))
+    n_epochs = args.n_epochs
+    lr = args.lr
+    ckpt_dir = args.ckpt_dir
+    
+    # model = VQVAE(
+    #     in_channel=3,
+    #     hidden_dim=256, 
+    #     K=512,
+    #     beta=0.25,
+    #     rngs=nnx.Rngs(jax.random.PRNGKey(0))
+    # )
+    model = VQVAE(
+        in_channel=3, 
+        hidden_dim=256, 
+        K=512, 
+        embedding_dim=10, 
+        beta=0.25, 
+        rngs=nnx.Rngs(jax.random.PRNGKey(0))
+    )
+    
+    
+    optimizer = nnx.Optimizer(model, optax.adam(lr))
+    
+    metrics = nnx.MultiMetric(        
+        total_loss=nnx.metrics.Average('total_loss'),
+        recon_loss=nnx.metrics.Average('recon_loss'),
+        vq_loss=nnx.metrics.Average('vq_loss'),
+    )
+    valid_total_loss_min = 1e9
+    for epoch in range(1, n_epochs + 1):
+        epoch_train_ds = train_ds.shuffle(len(train_ds), seed=epoch)
+        epoch_train_ds = epoch_train_ds.batch(args.batch_size, drop_remainder=True).prefetch(1)
+        
+        for step, batch in enumerate(tqdm(epoch_train_ds.as_numpy_iterator())):
+            # Run the optimization for one step and make a stateful update to the following:
+            # - The train state's model parameters
+            # - The optimizer state
+            # - The training loss batch metrics
+            train_step(model, optimizer, metrics, batch)
 
-    best_valid_loss = float("inf")
-    for epoch in range(mnist_config["epochs"]):
-        total_train_loss, total_train_vq_loss = 0, 0
-        for batch in tqdm(train_ds, desc=f"Training Epoch {epoch+1}"):
-            state, train_loss, mse_loss, vq_loss = train_step(state, batch)
-            total_train_loss += mse_loss
-            total_train_vq_loss += vq_loss
-        avg_train_loss = total_train_loss / len(train_ds)
-        avg_train_vq_loss = total_train_vq_loss / len(train_ds)
+        for metric, value in metrics.compute().items():
+            print(f"Epoch {epoch} - train_{metric}: {value}")
+            wandb.log({f'train_{metric}': value}, step=epoch)
+        
+        metrics.reset()
+        
+        # Compute the metrics on the test set after each training epoch.
+        for test_batch in tqdm(test_ds.as_numpy_iterator()):
+            eval_step(model, metrics, test_batch)
+        
+        for metric, value in metrics.compute().items():
+            print(f"Epoch {epoch} - valid_{metric}: {value}")
+            wandb.log({f'valid_{metric}': value}, step=epoch)
+        
+        valid_total_loss = metrics.compute()['total_loss']
+        metrics.reset()
 
-        total_valid_loss, total_valid_vq_loss = 0, 0
-        real_features, fake_features = [], []
-        for batch in tqdm(test_ds, desc="Validating"):
-            recon, valid_vq_loss = model.apply({'params': state.params}, batch)
-            valid_loss = jnp.mean((recon - batch) ** 2) + valid_vq_loss
-            total_valid_loss += valid_loss
-            total_valid_vq_loss += valid_vq_loss
-            real_features.append(get_features(batch))
-            fake_features.append(get_features(recon))
+        if valid_total_loss < valid_total_loss_min:
+            valid_total_loss_min = valid_total_loss
+            
+            _, state = nnx.split(model)
+            checkpointer = ocp.StandardCheckpointer()
+            path = ocp.test_utils.erase_and_create_empty(ckpt_dir)
+            checkpointer.save(path / 'best_loss', state)
+            
         
-        avg_valid_loss = total_valid_loss / len(test_ds)
-        avg_valid_vq_loss = total_valid_vq_loss / len(test_ds)
-        fid_score = calculate_fid(np.concatenate(real_features, axis=0), np.concatenate(fake_features, axis=0))
-        
-        wandb.log({"epoch": epoch + 1, "train_loss": avg_train_loss, "train_vq_loss": avg_train_vq_loss, "valid_loss": avg_valid_loss, "valid_vq_loss": avg_valid_vq_loss, "fid_score": fid_score})
-        print(f"Epoch [{epoch+1}/{mnist_config['epochs']}], Train Loss: {avg_train_loss:.4f}, Valid Loss: {avg_valid_loss:.4f}, FID: {fid_score:.4f}")
-        
-        if avg_valid_loss < best_valid_loss:
-            best_valid_loss = avg_valid_loss
-            with open(mnist_config["checkpoint_path"], "wb") as f:
-                pickle.dump(state.params, f)
-            print(f"✅ Checkpoint Saved: {mnist_config['checkpoint_path']} (Valid Loss: {best_valid_loss:.4f})")
