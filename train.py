@@ -30,26 +30,6 @@ def loss_fn(model: VQVAE, batch):
     aux = {"recon_loss": recon_loss, "vq_loss": loss}
     return recon_loss + loss, aux
 
-# def loss_fn(model: VQVAE, batch):
-#     x_recon, loss = model(batch['image'])
-#     # x_recon, loss = model(jnp.asarray(batch['image']))
-#     recon_loss = optax.squared_error(
-#         predictions=x_recon, targets=batch['image']
-#         # predictions=x_recon, targets=jnp.asarray(batch['image'])
-#     ).mean()
-#     aux = {"recon_loss": recon_loss, "vq_loss": loss}
-#     return recon_loss, aux
-
-# def loss_fn(model: VQVAE, batch):
-#     x_recon, loss = model(batch['image'])
-#     # x_recon, loss = model(jnp.asarray(batch['image']))
-#     recon_loss = optax.squared_error(
-#         predictions=x_recon, targets=batch['image']
-#         # predictions=x_recon, targets=jnp.asarray(batch['image'])
-#     ).mean()
-#     aux = {"recon_loss": recon_loss, "vq_loss": loss}
-#     return loss, aux
-
 @nnx.jit
 def train_step(model: VQVAE, optimizer: nnx.Optimizer, metrics: nnx.MultiMetric, batch):
     """Train for a single step."""
